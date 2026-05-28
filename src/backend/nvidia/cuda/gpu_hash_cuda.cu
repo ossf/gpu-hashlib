@@ -120,6 +120,16 @@ static void gpu_sha256_batch(
 
 extern "C" {
 
+#define CUDA_CHECK(call) \
+do { \
+    cudaError_t err = call; \
+    if (err != cudaSuccess) { \
+        fprintf(stderr, "CUDA error in %s at line %d: %s\n", \
+                __FILE__, __LINE__, cudaGetErrorString(err)); \
+        exit(EXIT_FAILURE); \
+    } \
+} while (0)
+
 CudaHashError cuda_hash_init(void) {
     // TODO: Call cudaGetDeviceCount() and enumerate GPUs
     // For now, report success but no devices
@@ -156,8 +166,11 @@ CudaHashError cuda_hash_create_context(CudaHashAlgorithm algorithm,
     // 3. *handle = context;
     // 4. Return CUDA_HASH_SUCCESS
 
-    g_last_error = "CUDA context creation not yet implemented";
-    return CUDA_HASH_ERROR_NO_DEVICE;
+    if (cudaGetDeviceCount() < 1) {
+        g_last_error = "CUDA context creation not yet implemented";
+        return CUDA_HASH_ERROR_NO_DEVICE;
+    }
+    *handle = context;
 }
 
 void cuda_hash_destroy_context(CudaHashContextHandle handle) {
@@ -186,8 +199,13 @@ CudaHashError cuda_hash_single(CudaHashContextHandle handle,
     //   2. Launch kernel with 1 work-item
     //   3. cudaMemcpy result back
 
-    g_last_error = "CUDA single hash not yet implemented";
-    return CUDA_HASH_ERROR_NO_DEVICE;
+    uint8_t *gpu_input = nullptr;
+    CUDA_CHECK( cudaMalloc(&gpu_input, input_len) );
+    CUDA_CHECK( cudaMalloc(&gpu_output, output_len) );
+    CUDA_CHECK( cudaMemcpy(gpu_input, input, input_len, cudaMemcpyHostToDevice) );
+    hash(gpu_output, gpu_input, 16, input_len / 16);
+    if(output_len) *output_len = ctx->output_size;
+    return CUDA_HASH_SUCCESS;
 }
 
 CudaHashError cuda_hash_batch(CudaHashContextHandle handle,
