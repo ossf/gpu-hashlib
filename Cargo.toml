@@ -1,0 +1,63 @@
+[package]
+name = "gpu-hashlib"
+edition = "2021"
+version = "0.1.0"
+description = "A generic multi-vendor GPU-accelerated hashing library for ML model signing and artifact verification"
+authors = ["Intel Labs"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/intel/gpu-hashlib"
+documentation = "https://docs.rs/gpu-hashlib"
+readme = "README.md"
+keywords = ["gpu", "hashing", "model-signing", "openssf", "c2pa"]
+categories = ["cryptography", "authentication", "science"]
+build = "build.rs"
+
+[features]
+default = []
+
+# Intel Xe GPU backend via SYCL/oneAPI
+# Requires: source /opt/intel/oneapi/setvars.sh
+intel = []
+
+# NVIDIA GPU backend via CUDA
+# Requires: CUDA Toolkit installed
+nvidia = []
+
+# Enable all GPU backends
+gpu-all = ["intel", "nvidia"]
+
+# OpenSSF model signing support
+openssf-signing = ["dep:sigstore", "dep:oci-distribution"]
+
+# Measurement and benchmarking utilities
+measure = []
+
+[dependencies]
+ring = "0.17"
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+log = "0.4"
+sha2 = "0.10"
+digest = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+
+# OpenSSF model signing deps (optional)
+sigstore = { version = "0.10", optional = true, default-features = false }
+oci-distribution = { version = "0.11", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio = { version = "1", features = ["full"] }
+tempfile = "3"
+
+[build-dependencies]
+
+[[bench]]
+name = "gpu_hash_benchmark"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

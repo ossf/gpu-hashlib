@@ -1,44 +1,129 @@
-# **OSSF Project/WG Name**
+# **gpu-hashlib**
 
-[Brief description of the initiative]
+Generic multi-vendor GPU-accelerated hashing library for ML model signing and artifact verification.
+
+[![Rust](https://img.shields.io/badge/rust-2021-orange.svg)]()
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)]()
 
 
 ## 
 **Motivation**
 
-[Background / use cases of the problem to be solved]
+ML model integrity is critical for supply chain security. Hashing large model artifacts (multi-GB weights, checkpoints) is CPU-bound and slow. GPU-accelerated hashing provides significant speedups for signing and verification workflows, enabling practical adoption of model signing in CI/CD pipelines.
 
 
 ## 
 **Objective**
 
-[What is to be achieved with this initiative]
-
-[OKRs - OPTIONAL]
+Provide a unified Rust API for GPU-accelerated cryptographic hashing across multiple GPU vendors (Intel, NVIDIA), with automatic fallback to CPU, designed for OpenSSF model signing and general artifact verification.
 
 
 ## 
 **Scope**
 
-[What is in and out of scope]
+**In scope:**
+- GPU-accelerated SHA-256/384/512 hashing
+- Intel Xe GPU backend via SYCL/oneAPI
+- NVIDIA GPU backend via CUDA
+- CPU fallback via ring/sha2
+- OpenSSF model signing manifest generation and verification
+- DSSE pre-authentication encoding
+
+**Out of scope:**
+- Key management and actual cryptographic signing (delegated to sigstore)
+- Non-SHA hash algorithms
+- GPU backends for other vendors (AMD, Apple Silicon)
 
 
 ## 
 **Prior Work**
 
+*   Intel atlas-c2pa-lib — SYCL SHA kernels for C2PA content authenticity
 
-
-*   List of prior and/or related projects
 
 ## 
 **Active Projects**
 
-[Optional]
+### Architecture
 
-## 
-**Inactive Projects**
+```
+                    +-----------------------+
+                    |    Public API         |
+                    |    (lib.rs)           |
+                    |                       |
+                    |  hash()  hash_batch() |
+                    |  verify()  sign()     |
+                    +-----------+-----------+
+                                |
+                    +-----------+-----------+
+                    |    GpuBackend Trait    |
+                    |    (backend/mod.rs)    |
+                    +-----------+-----------+
+                                |
+              +-----------------+-----------------+
+              |                 |                 |
+    +---------+-------+ +------+--------+ +------+--------+
+    |   Intel SYCL    | |  NVIDIA CUDA  | | CPU Fallback  |
+    |   feature:      | |  feature:     | | (ring/sha2)   |
+    |   "intel"       | |  "nvidia"     | | always on     |
+    +-----------------+ +---------------+ +---------------+
 
-[Optional]
+    +-----------------------------------------------------+
+    |          OpenSSF Model Signing  (signing/)           |
+    +-----------------------------------------------------+
+    |       Measurement & Benchmarking  (measure/)        |
+    +-----------------------------------------------------+
+```
+
+### Features
+
+| Feature | Description | Status |
+|---|---|---|
+| `intel` | Intel Xe GPU via SYCL/oneAPI | ✅ Full implementation |
+| `nvidia` | NVIDIA GPU via CUDA | 🔲 Barebones (trait wired, kernels stubbed) |
+| `openssf-signing` | OpenSSF model signing integration | ✅ Implemented |
+| `measure` | Benchmarking & comparison utilities | ✅ Implemented |
+| CPU fallback | ring-based software hashing | ✅ Always available |
+
+### Project Structure
+
+```
+gpu-hashlib/
+├── Cargo.toml
+├── build.rs                          # Compiles SYCL/CUDA kernels
+├── src/
+│   ├── lib.rs                        # Public API
+│   ├── error.rs                      # Unified error types
+│   ├── backend/
+│   │   ├── mod.rs                    # GpuBackend trait + shared types
+│   │   ├── auto.rs                   # Automatic backend selection
+│   │   ├── cpu.rs                    # CPU fallback (ring)
+│   │   ├── intel/
+│   │   │   ├── mod.rs                # Intel backend impl
+│   │   │   ├── ffi.rs                # FFI to libgpu_hash_intel.so
+│   │   │   ├── stub.c               # Stub when SYCL unavailable
+│   │   │   └── sycl/
+│   │   │       ├── gpu_hash.h        # C API header
+│   │   │       └── gpu_hash.cpp      # SYCL SHA kernels
+│   │   └── nvidia/
+│   │       ├── mod.rs                # NVIDIA backend impl (barebones)
+│   │       ├── ffi.rs                # FFI to libgpu_hash_nvidia.so
+│   │       └── cuda/
+│   │           ├── gpu_hash_cuda.h   # C API header
+│   │           └── gpu_hash_cuda.cu  # CUDA stubs (TODO)
+│   ├── signing/
+│   │   ├── mod.rs                    # OpenSSF signing entry point
+│   │   ├── digest.rs                 # Artifact digest computation
+│   │   ├── manifest.rs               # DSSE manifest generation
+│   │   └── verify.rs                 # Artifact verification
+│   └── measure/
+│       └── mod.rs                    # Benchmarking & comparison
+├── benches/
+│   └── gpu_hash_benchmark.rs
+├── examples/
+│   └── sign_model.rs
+└── tests/
+```
 
 # 
 **Get Involved**
@@ -53,10 +138,65 @@
 ### 
 **Quick Start**
 
-*   Areas that need contributions
-*   Build information if applicable
-*   Where to file issues
-*   Etc.
+```toml
+[dependencies]
+gpu-hashlib = "0.1"
+
+# With Intel GPU support
+gpu-hashlib = { version = "0.1", features = ["intel"] }
+
+# With all GPU backends
+gpu-hashlib = { version = "0.1", features = ["gpu-all"] }
+```
+
+#### Basic Hashing
+
+```rust
+use gpu_hashlib::{hash, hash_batch, verify, HashAlgorithm};
+
+// Automatic backend selection (GPU → CPU fallback)
+let digest = hash(b"model weights", HashAlgorithm::Sha256)?;
+println!("{}", digest.to_hex());
+
+// Verify
+assert!(verify(b"model weights", digest.as_bytes(), HashAlgorithm::Sha256)?);
+
+// Batch hash (GPU-parallel)
+let chunks = vec![b"chunk1".to_vec(), b"chunk2".to_vec()];
+let digests = hash_batch(&chunks, HashAlgorithm::Sha256)?;
+```
+
+#### Building
+
+**CPU only (no GPU features):**
+
+```bash
+cargo build
+cargo test
+```
+
+**With Intel GPU:**
+
+```bash
+source /opt/intel/oneapi/setvars.sh
+cargo build --features intel
+cargo test --features intel
+```
+
+**With NVIDIA GPU (when implemented):**
+
+```bash
+cargo build --features nvidia
+```
+
+**All backends:**
+
+```bash
+source /opt/intel/oneapi/setvars.sh
+cargo build --features gpu-all
+```
+
+*   Issues: File issues in this repository
 
 ## 
 **Meeting times**
@@ -69,7 +209,7 @@
 **Governance**
 
 [TODO: Update this link to your specific CHARTER.md file]
-The [CHARTER.md](https://github.com/ossf/project-template/blob/main/CHARTER.md) outlines the scope and governance of our group activities.
+The [CHARTER.md](CHARTER.md) outlines the scope and governance of our group activities.
 
 
 [OPTIONAL]
@@ -80,10 +220,6 @@ The [CHARTER.md](https://github.com/ossf/project-template/blob/main/CHARTER.md) 
 **Intellectual Property**
 
 In accordance with the [OpenSSF Charter (PDF)](https://charter.openssf.org/), work produced by this group is licensed as follows:
-
-[TODO: Select below the applicable license(s), delete those that don't apply, and update the LICENSE file accordingly. For specification development refer to the specific instructions on the [Community Specification Getting Started page](https://github.com/CommunitySpecification/1.0/blob/main/..Getting%20Started.md).
-
-Note that for source code, instead of Apache, you may choose to use the MIT License available at https://opensource.org/licenses/MIT. Otherwise, no other license than those listed here may be used without approval from the Governing Board.]
 
 1. Software source code
 * Apache License, Version 2.0, available at https://www.apache.org/licenses/LICENSE-2.0;
