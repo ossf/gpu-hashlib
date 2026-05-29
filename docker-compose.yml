@@ -1,0 +1,21 @@
+services:
+  hashlib:
+    image: hashlib:latest
+    container_name: hashlib
+    build: .
+    shm_size: 8g
+    dns: 8.8.8.8
+    runtime: nvidia
+    volumes:
+      - .:/home
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    command: >
+      tail -f /dev/null

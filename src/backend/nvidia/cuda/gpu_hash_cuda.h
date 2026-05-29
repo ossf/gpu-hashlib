@@ -18,11 +18,11 @@
 extern "C" {
 #endif
 
-typedef enum {
-    CUDA_HASH_SHA256 = 0,
-    CUDA_HASH_SHA384 = 1,
-    CUDA_HASH_SHA512 = 2
-} CudaHashAlgorithm;
+// typedef enum {
+//     CUDA_HASH_SHA256 = 0,
+//     CUDA_HASH_SHA384 = 1,
+//     CUDA_HASH_SHA512 = 2
+// } CudaHashAlgorithm;
 
 typedef enum {
     CUDA_HASH_SUCCESS = 0,
@@ -62,7 +62,7 @@ int cuda_hash_get_device_count(void);
  * @param device_index GPU index (-1 for auto-select)
  * @param handle Output: opaque context handle
  */
-CudaHashError cuda_hash_create_context(CudaHashAlgorithm algorithm,
+CudaHashError cuda_hash_create_context(GpuHashAlgorithm algorithm,
                                        int device_index,
                                        CudaHashContextHandle* handle);
 
@@ -89,7 +89,7 @@ CudaHashError cuda_hash_batch(CudaHashContextHandle handle,
 /**
  * Get output size for a hash algorithm.
  */
-size_t cuda_hash_output_size(CudaHashAlgorithm algorithm);
+size_t cuda_hash_output_size(GpuHashAlgorithm algorithm);
 
 /**
  * Get the last error message.

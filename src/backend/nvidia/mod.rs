@@ -216,13 +216,13 @@ unsafe impl Sync for NvidiaBackend {}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-fn to_ffi_algorithm(alg: HashAlgorithm) -> ffi::CudaHashAlgorithm {
-    match alg {
-        HashAlgorithm::Sha256 => ffi::CudaHashAlgorithm::Sha256,
-        HashAlgorithm::Sha384 => ffi::CudaHashAlgorithm::Sha384,
-        HashAlgorithm::Sha512 => ffi::CudaHashAlgorithm::Sha512,
-    }
-}
+// fn to_ffi_algorithm(alg: HashAlgorithm) -> ffi::CudaHashAlgorithm {
+//     match alg {
+//         HashAlgorithm::Sha256 => ffi::HashAlgorithm::Sha256,
+//         HashAlgorithm::Sha384 => ffi::CudaHashAlgorithm::Sha384,
+//         HashAlgorithm::Sha512 => ffi::CudaHashAlgorithm::Sha512,
+//     }
+// }
 
 fn check_ffi_error(err: ffi::CudaHashError) -> HashResult<()> {
     match err {

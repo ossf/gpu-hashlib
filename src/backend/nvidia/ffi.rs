@@ -8,13 +8,13 @@
 
 use std::os::raw::{c_char, c_int, c_void};
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CudaHashAlgorithm {
-    Sha256 = 0,
-    Sha384 = 1,
-    Sha512 = 2,
-}
+// #[repr(C)]
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// pub enum CudaHashAlgorithm {
+//     Sha256 = 0,
+//     Sha384 = 1,
+//     Sha512 = 2,
+// }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +34,7 @@ unsafe extern "C" {
     pub fn cuda_hash_is_available() -> c_int;
     pub fn cuda_hash_get_device_count() -> c_int;
     pub fn cuda_hash_create_context(
-        algorithm: CudaHashAlgorithm,
+        algorithm: GpuHashAlgorithm,
         device_index: c_int,
         handle: *mut CudaHashContextHandle,
     ) -> CudaHashError;
@@ -54,7 +54,7 @@ unsafe extern "C" {
         outputs: *mut *mut u8,
         output_size: usize,
     ) -> CudaHashError;
-    pub fn cuda_hash_output_size(algorithm: CudaHashAlgorithm) -> usize;
+    pub fn cuda_hash_output_size(algorithm: GpuHashAlgorithm) -> usize;
     pub fn cuda_hash_get_last_error() -> *const c_char;
 }
 

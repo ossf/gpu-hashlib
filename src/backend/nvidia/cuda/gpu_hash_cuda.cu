@@ -23,18 +23,7 @@
 #include "gpu_hash_cuda.h"
 #include <cstring>
 #include <string>
-
-/* ──────────────────────────────────────────────────────────────────────────
- * SHA-256 Constants (same as Intel backend)
- * ────────────────────────────────────────────────────────────────────────── */
-
-// TODO: Move to __constant__ memory for GPU kernels
-/*
-__constant__ uint32_t d_K256[64] = { ... };
-__constant__ uint32_t d_H256[8]  = { ... };
-*/
-
-static const char* g_last_error = "NVIDIA CUDA backend not yet implemented";
+#include "algorithm/sha256.cuh"
 
 /* ──────────────────────────────────────────────────────────────────────────
  * CUDA Kernel Stubs
@@ -43,7 +32,7 @@ static const char* g_last_error = "NVIDIA CUDA backend not yet implemented";
  * Use shared memory for K constants, similar to SYCL local_accessor.
  * ────────────────────────────────────────────────────────────────────────── */
 
-/*
+
 __global__ void sha256_kernel(
     const uint8_t* __restrict__ input,
     const uint64_t* __restrict__ offsets,
@@ -51,25 +40,15 @@ __global__ void sha256_kernel(
     uint8_t* __restrict__ output,
     size_t num_messages)
 {
-    // TODO: Implement SHA-256 compression on GPU
-    //
-    // Architecture should mirror gpu_sha256_batch_optimized() in the
-    // Intel backend:
-    //
-    // 1. Load K constants into __shared__ memory cooperatively
-    // 2. Each thread processes one message:
-    //    a. Initialize state from H256_INIT
-    //    b. Process 64-byte blocks (message schedule + compression)
-    //    c. Handle padding
-    //    d. Write 32-byte output
-    //
-    // Key differences from SYCL:
-    //   - Use __shared__ instead of sycl::local_accessor
-    //   - Use blockIdx.x * blockDim.x + threadIdx.x instead of get_global_id
-    //   - Use __syncthreads() instead of item.barrier()
-    //   - Use cudaMalloc/cudaMemcpy instead of sycl::malloc_device/memcpy
+    uint64_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId < num_messages) {
+        SHA256_CTX ctx;
+        init(&ctx);
+        update(&ctx, input+offsets[threadId], lengths[threadId]);
+        final(&ctx, output+32*threadId);
+    }
 }
-*/
+
 
 /*
 __global__ void sha512_kernel(
@@ -146,13 +125,14 @@ int cuda_hash_is_available(void) {
 }
 
 int cuda_hash_get_device_count(void) {
-    // TODO: int count; cudaGetDeviceCount(&count); return count;
-    return 0;
+    int count = 0;
+    CUDA_CHECK( cudaGetDeviceCount(&count) );
+    return count;
 }
 
-CudaHashError cuda_hash_create_context(CudaHashAlgorithm algorithm,
+CudaHashError cuda_hash_create_context(GpuHashAlgorithm algorithm,
                                        int device_index,
-                                       CudaHashContextHandle* handle) {
+                                       GpuHashContext* handle) {
     (void)algorithm;
     (void)device_index;
     (void)handle;
@@ -173,7 +153,7 @@ CudaHashError cuda_hash_create_context(CudaHashAlgorithm algorithm,
     *handle = context;
 }
 
-void cuda_hash_destroy_context(CudaHashContextHandle handle) {
+void cuda_hash_destroy_context(GpuHashContext handle) {
     (void)handle;
     // TODO:
     // 1. Destroy CUDA stream
@@ -181,7 +161,7 @@ void cuda_hash_destroy_context(CudaHashContextHandle handle) {
     // 3. delete context
 }
 
-CudaHashError cuda_hash_single(CudaHashContextHandle handle,
+CudaHashError cuda_hash_single(GpuHashContext handle,
                                const uint8_t* input, size_t input_len,
                                uint8_t* output, size_t* output_len) {
     (void)handle;
@@ -208,7 +188,7 @@ CudaHashError cuda_hash_single(CudaHashContextHandle handle,
     return CUDA_HASH_SUCCESS;
 }
 
-CudaHashError cuda_hash_batch(CudaHashContextHandle handle,
+CudaHashError cuda_hash_batch(GpuHashContext handle,
                               const uint8_t** inputs, const size_t* input_lens,
                               size_t num_inputs,
                               uint8_t** outputs, size_t output_size) {
@@ -242,7 +222,7 @@ CudaHashError cuda_hash_batch(CudaHashContextHandle handle,
     return CUDA_HASH_ERROR_NO_DEVICE;
 }
 
-size_t cuda_hash_output_size(CudaHashAlgorithm algorithm) {
+size_t cuda_hash_output_size(GpuHashAlgorithm algorithm) {
     switch (algorithm) {
         case CUDA_HASH_SHA256: return 32;
         case CUDA_HASH_SHA384: return 48;
